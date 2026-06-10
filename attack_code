@@ -1,0 +1,64 @@
+using UnityEngine;
+
+public class PlayerAttack : MonoBehaviour
+{
+    [Header("Attack Settings")]
+    public float attackDamage = 20f;
+    public float attackRange = 2f;    // 공격 반경 (원의 반지름)
+    public float attackAngle = 180f;  // 공격 각도 (180도 = 반원)
+    
+    [Header("Targeting")]
+    public Transform attackPoint;     // 공격의 중심점 (보통 플레이어 몸통)
+    public LayerMask enemyLayer;      // 슬라임이 포함된 레이어
+
+    // 플레이어가 바라보는 방향 (기본값: 오른쪽)
+    // 이동 스크립트에서 캐릭터가 뒤돌면 이 값을 바꿔주어야 합니다.
+    public Vector2 facingDirection = Vector2.right; 
+
+    void Update()
+    {
+        // Enter 키를 누르면 공격
+        if (Input.GetKeyDown(KeyCode.Return)) 
+        {
+            Attack();
+        }
+    }
+
+    void Attack()
+    {
+        Debug.Log("플레이어 공격!");
+        
+        // 1. 공격 반경 안의 모든 적 감지 (원형 범위)
+        Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(attackPoint.position, attackRange, enemyLayer);
+
+        foreach (Collider2D enemy in hitEnemies)
+        {
+            // 2. 적과 플레이어 사이의 방향 벡터 계산
+            Vector2 directionToEnemy = (enemy.transform.position - attackPoint.position).normalized;
+
+            // 3. 플레이어가 보는 방향과 적의 방향 사이의 각도 계산
+            float angleToEnemy = Vector2.Angle(facingDirection, directionToEnemy);
+
+            // 4. 각도가 attackAngle의 절반(반원일 경우 90도) 이하인지 확인
+            if (angleToEnemy <= attackAngle / 2f)
+            {
+                // 범위 안에 있다면 데미지 주기
+                CharacterHealth enemyHealth = enemy.GetComponent<CharacterHealth>();
+                if (enemyHealth != null)
+                {
+                    enemyHealth.TakeDamage(attackDamage);
+                }
+            }
+        }
+    }
+
+    // 에디터에서 공격 범위를 눈으로 보기 위한 기즈모 그리기
+    private void OnDrawGizmosSelected()
+    {
+        if (attackPoint == null) return;
+        
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(attackPoint.position, attackRange);
+        // (참고: 에디터 상에서는 완벽한 원으로 보이지만, 실제 코드는 반원만 데미지를 줍니다)
+    }
+}
