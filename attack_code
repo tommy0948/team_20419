@@ -1,64 +1,99 @@
+using System.Collections;
 using UnityEngine;
 
-public class PlayerAttack : MonoBehaviour
+public class Enemy : MonoBehaviour
 {
-    [Header("Attack Settings")]
-    public float attackDamage = 20f;
-    public float attackRange = 2f;    // 공격 반경 (원의 반지름)
-    public float attackAngle = 180f;  // 공격 각도 (180도 = 반원)
-    
-    [Header("Targeting")]
-    public Transform attackPoint;     // 공격의 중심점 (보통 플레이어 몸통)
-    public LayerMask enemyLayer;      // 슬라임이 포함된 레이어
+    Animator anim;
+    Rigidbody2D rigid;
 
-    // 플레이어가 바라보는 방향 (기본값: 오른쪽)
-    // 이동 스크립트에서 캐릭터가 뒤돌면 이 값을 바꿔주어야 합니다.
-    public Vector2 facingDirection = Vector2.right; 
+    public int hp = 10;
+
+    public float speed = 2f;
+
+    public int attackDamage = 10;
+    public float attackDelay = 1f;
+
+    public float stunTime = 0.5f;
+
+    Transform player;
+
+    float attackTimer = 0f;
+    bool isDead = false;
+    bool isChasing = false;
+    bool isStunned = false;
+
+    void Start()
+    {
+        anim = GetComponent<Animator>();
+        rigid = GetComponent<Rigidbody2D>();
+
+        player = GameObject.FindWithTag("Player").transform;
+    }
 
     void Update()
     {
-        // Enter 키를 누르면 공격
-        if (Input.GetKeyDown(KeyCode.Return)) 
+        attackTimer += Time.deltaTime;
+    }
+
+    void FixedUpdate()
+    {
+        if (isDead) return;
+        if (!isChasing) return;
+        if (isStunned) return;
+
+        Vector2 dir = (player.position - transform.position).normalized;
+        rigid.MovePosition(rigid.position + dir * speed * Time.fixedDeltaTime);
+    }
+
+    void OnBecameVisible()
+    {
+        isChasing = true;
+    }
+
+    public void TakeDamage(int damage)
+    {
+        if (isDead) return;
+
+        hp -= damage;
+        Debug.Log(gameObject.name + " health " + hp);
+
+        anim.SetTrigger("ouch");
+
+        StartCoroutine(Stun());
+
+        if (hp <= 0)
         {
-            Attack();
+            isDead = true;
+            anim.SetTrigger("dead");
+            Destroy(gameObject, 1f);
         }
     }
 
-    void Attack()
+    IEnumerator Stun()
     {
-        Debug.Log("플레이어 공격!");
-        
-        // 1. 공격 반경 안의 모든 적 감지 (원형 범위)
-        Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(attackPoint.position, attackRange, enemyLayer);
+        isStunned = true;
 
-        foreach (Collider2D enemy in hitEnemies)
+        yield return new WaitForSeconds(stunTime);
+
+        isStunned = false;
+    }
+
+    void OnCollisionStay2D(Collision2D collision)
+    {
+        if (isDead) return;
+
+        if (collision.gameObject.CompareTag("Player"))
         {
-            // 2. 적과 플레이어 사이의 방향 벡터 계산
-            Vector2 directionToEnemy = (enemy.transform.position - attackPoint.position).normalized;
-
-            // 3. 플레이어가 보는 방향과 적의 방향 사이의 각도 계산
-            float angleToEnemy = Vector2.Angle(facingDirection, directionToEnemy);
-
-            // 4. 각도가 attackAngle의 절반(반원일 경우 90도) 이하인지 확인
-            if (angleToEnemy <= attackAngle / 2f)
+            if (attackTimer >= attackDelay)
             {
-                // 범위 안에 있다면 데미지 주기
-                CharacterHealth enemyHealth = enemy.GetComponent<CharacterHealth>();
-                if (enemyHealth != null)
+                PlayerHealth playerHealth = collision.gameObject.GetComponent<PlayerHealth>();
+
+                if (playerHealth != null)
                 {
-                    enemyHealth.TakeDamage(attackDamage);
+                    playerHealth.Damage(attackDamage);
+                    attackTimer = 0f;
                 }
             }
         }
-    }
-
-    // 에디터에서 공격 범위를 눈으로 보기 위한 기즈모 그리기
-    private void OnDrawGizmosSelected()
-    {
-        if (attackPoint == null) return;
-        
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(attackPoint.position, attackRange);
-        // (참고: 에디터 상에서는 완벽한 원으로 보이지만, 실제 코드는 반원만 데미지를 줍니다)
     }
 }
